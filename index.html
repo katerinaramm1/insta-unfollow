@@ -1,0 +1,1524 @@
+<title>Unfollow Queue for Instagram</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one narrow column. Load your export, read four counts, then work through a sticky-timer queue in batches. */
+:root{
+  --bg:#F2F5F4;
+  --surface:#FFFFFF;
+  --ink:#12201B;
+  --muted:#586963;
+  --line:#D3DCD8;
+  --accent:#1C4ED8;
+  --accent-ink:#FFFFFF;
+  --accent-soft:#E6ECFD;
+  --done:#17754A;
+  --done-soft:#E1F2E9;
+  --wait:#8F5300;
+  --wait-soft:#FAEED2;
+  --font-display:"Bricolage Grotesque","Segoe UI",system-ui,sans-serif;
+  --font-body:"Instrument Sans","Segoe UI",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1412;--surface:#151D1A;--ink:#E6EEEA;--muted:#93A39C;--line:#26332E;
+    --accent:#86A7FF;--accent-ink:#0E1412;--accent-soft:#1A2542;
+    --done:#5FD39A;--done-soft:#133125;--wait:#F0B65A;--wait-soft:#33270F;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1412;--surface:#151D1A;--ink:#E6EEEA;--muted:#93A39C;--line:#26332E;
+  --accent:#86A7FF;--accent-ink:#0E1412;--accent-soft:#1A2542;
+  --done:#5FD39A;--done-soft:#133125;--wait:#F0B65A;--wait-soft:#33270F;
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+body{
+  background:var(--bg);color:var(--ink);
+  font:400 15px/1.5 var(--font-body);
+  padding-block:28px 72px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+h1,h2{font-family:var(--font-display);margin:0;text-wrap:balance}
+h1{font-size:clamp(28px,6vw,38px);line-height:1.1;font-weight:700;letter-spacing:-.01em}
+h2{font-size:18px;font-weight:600}
+p{margin:0}
+.lede{color:var(--muted);max-width:56ch;margin-top:8px}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono{font-family:var(--font-mono)}
+
+/* load */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.load{padding:18px;display:flex;flex-direction:column;gap:12px}
+.drop{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-align:center;
+  border:1.5px dashed var(--line);border-radius:8px;padding:22px 16px;cursor:pointer;background:var(--bg);
+}
+.drop:hover,.drop.over,.drop:focus-within{border-color:var(--accent);background:var(--accent-soft)}
+.drop strong{font-weight:600}
+.drop span{color:var(--muted);font-size:14px}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.status{font-size:14px;color:var(--muted);min-height:1.5em;overflow-wrap:anywhere}
+.status.err{color:var(--wait)}
+.privacy{font-size:13px;color:var(--muted)}
+details summary{cursor:pointer;font-weight:500}
+details ol{margin:10px 0 0;padding-left:20px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+details ol b{color:var(--ink);font-weight:600}
+
+/* results */
+.sample-note{background:var(--wait-soft);color:var(--wait);border-radius:8px;padding:10px 14px;font-size:14px;font-weight:500}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid var(--line);border-radius:10px;background:var(--surface);overflow:hidden}
+.stat{padding:14px 16px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.stat+.stat{border-left:1px solid var(--line)}
+.stat .k{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.stat .v{font:600 26px/1.15 var(--font-display);font-variant-numeric:tabular-nums}
+.stat.hot .v{color:var(--accent)}
+@media (max-width:560px){
+  .stats{grid-template-columns:1fr 1fr}
+  .stat:nth-child(3){border-left:0}
+  .stat:nth-child(n+3){border-top:1px solid var(--line)}
+}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tab{background:none;border:0;border-bottom:2px solid transparent;padding:10px 12px;margin-bottom:-1px;color:var(--muted);font-weight:500;white-space:nowrap}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.tab .c{font-family:var(--font-mono);font-size:12px;margin-left:6px}
+
+/* queue */
+.controls{display:flex;flex-wrap:wrap;gap:12px 18px;align-items:center;font-size:14px;color:var(--muted)}
+.controls label{display:flex;align-items:center;gap:8px}
+select{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-height:36px}
+.hint{font-size:13px;color:var(--muted)}
+.bar{
+  position:sticky;top:env(safe-area-inset-top,0px);z-index:5;
+  display:grid;grid-template-columns:auto auto 1fr;align-items:center;gap:8px 16px;
+  background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 16px;
+}
+.clock{display:flex;flex-direction:column;line-height:1.2}
+.clock .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.clock .time{font:500 26px/1.2 var(--font-mono);font-variant-numeric:tabular-nums}
+.chip{font-size:13px;font-weight:600;border-radius:999px;padding:4px 12px;white-space:nowrap}
+.chip.ready{background:var(--done-soft);color:var(--done)}
+.chip.wait{background:var(--wait-soft);color:var(--wait)}
+.prog{display:flex;flex-direction:column;gap:6px;min-width:0;align-items:flex-end;font-size:13px;color:var(--muted)}
+.prog .track{width:100%;height:6px;border-radius:99px;background:var(--line);overflow:hidden}
+.prog .track i{display:block;height:100%;width:0;background:var(--done);transition:width .25s}
+@media (max-width:520px){
+  .bar{grid-template-columns:1fr auto}
+  .prog{grid-column:1 / -1;align-items:stretch}
+  .prog span{align-self:flex-end}
+}
+ol.rows{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;background:var(--surface);overflow:hidden}
+.row{
+  display:grid;grid-template-columns:2.4rem minmax(0,1fr) auto auto;align-items:center;gap:4px 12px;
+  padding:10px 14px;border-top:1px solid var(--line);
+}
+.row:first-child{border-top:0}
+.row .n{font:400 13px var(--font-mono);color:var(--muted)}
+.row .user{font:500 15px var(--font-mono);color:var(--accent);text-decoration:none;overflow-wrap:anywhere;padding-block:6px}
+.row .user:hover{text-decoration:underline}
+.row .meta{font-size:13px;color:var(--muted);white-space:nowrap}
+.row .act{display:flex;align-items:center;gap:8px;justify-content:flex-end;font-size:13px}
+.row.next{background:var(--accent-soft)}
+.row .tag{display:none;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--accent)}
+.row.next .tag{display:inline}
+.row.done{background:var(--done-soft)}
+.row.done .user{color:var(--done);text-decoration:line-through}
+.row .when{color:var(--done);font-weight:500;white-space:nowrap}
+.btn{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 12px;min-height:36px;font-weight:500}
+.btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover:not(:disabled){color:var(--accent-ink);filter:brightness(1.08)}
+.btn.small{min-height:30px;padding:3px 10px;font-size:13px}
+@media (max-width:520px){
+  .row{grid-template-columns:2rem minmax(0,1fr) auto;grid-template-areas:"n user act" ". meta act"}
+  .row .n{grid-area:n}.row .user{grid-area:user}.row .meta{grid-area:meta}.row .act{grid-area:act;flex-direction:column;align-items:flex-end;gap:4px}
+}
+.batchnav{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
+.batchnav .lbl{font-size:14px;color:var(--muted)}
+.note{background:var(--done-soft);color:var(--done);border-radius:8px;padding:12px 14px;font-weight:500}
+.empty{padding:28px 16px;text-align:center;color:var(--muted)}
+.linklike{background:none;border:0;padding:0;color:var(--muted);text-decoration:underline;font-size:13px}
+.foot{display:flex;flex-direction:column;gap:12px;align-items:flex-start}
+.keptlist{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.keptlist li{display:flex;justify-content:space-between;align-items:center;gap:10px;font:400 14px var(--font-mono)}
+
+/* possible renames */
+.tip{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;background:var(--accent-soft);border-radius:8px;padding:10px 14px;font-size:14px}
+.renintro{font-size:14px;color:var(--muted);max-width:64ch}
+.renintro b{color:var(--ink);font-weight:600}
+.renlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;background:var(--surface);overflow:hidden}
+.ren{padding:12px 14px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px;min-width:0}
+.ren:first-child{border-top:0}
+.ren-line{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;min-width:0}
+.ren a{font:500 15px var(--font-mono);color:var(--accent);text-decoration:none;overflow-wrap:anywhere;padding-block:4px}
+.ren a:hover{text-decoration:underline}
+.ren .arrow{color:var(--muted)}
+.conf{font-size:12px;font-weight:600;border-radius:999px;padding:2px 10px;margin-left:auto;white-space:nowrap}
+.conf.t3,.conf.t2{background:var(--done-soft);color:var(--done)}
+.conf.t1{background:var(--wait-soft);color:var(--wait)}
+.ren-sub{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.ren-act{display:flex;flex-wrap:wrap;gap:8px}
+
+/* left to do */
+.counter{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.counter-main{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px;color:var(--muted)}
+.counter .big{font:700 30px/1.1 var(--font-display);color:var(--ink);font-variant-numeric:tabular-nums}
+.counter b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.counter .track{height:6px;border-radius:99px;background:var(--line);overflow:hidden}
+.counter .track i{display:block;height:100%;width:0;background:var(--accent);transition:width .25s}
+.counter-sub{font-size:13px;color:var(--muted)}
+
+/* rate, chart and downloads */
+.fold{padding:12px 16px}
+.fold>summary{font-weight:500;cursor:pointer;display:flex;flex-wrap:wrap;gap:2px 12px;justify-content:space-between;align-items:baseline}
+.sumnote{font:400 13px var(--font-mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.rates{display:grid;grid-template-columns:1fr 1fr;gap:12px 20px;margin:14px 0 18px}
+.rate{display:flex;flex-direction:column;gap:2px;min-width:0}
+.rate .v{font:600 28px/1.1 var(--font-display)}
+.rate .k{font-size:13px;color:var(--muted)}
+.chart-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.chart-head strong{font-weight:600}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{background:var(--surface);border:0;padding:5px 12px;min-height:32px;font-size:13px;color:var(--muted)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--ink);font-weight:600}
+.chartbox{position:relative;overflow-x:auto;overflow-y:hidden}
+.chartbox svg{display:block}
+.g-grid{stroke:var(--line);stroke-width:1}
+.g-base{stroke:var(--muted);stroke-width:1;opacity:.5}
+.g-text{fill:var(--muted);font:400 11px var(--font-mono)}
+.gbar{fill:var(--accent);pointer-events:none}
+.gbar.sel{filter:brightness(1.2)}
+.ghit{fill:transparent;cursor:pointer}
+.ctip[hidden],.sharebar [hidden],.copyrow [hidden]{display:none!important}
+.ctip{position:absolute;z-index:2;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:4px 10px;display:flex;flex-direction:column;font-size:12px;color:var(--muted);white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.14)}
+.ctip strong{font:600 16px/1.2 var(--font-display);color:var(--ink)}
+.chartread{font-size:14px;margin-top:8px;min-height:1.5em}
+.tview{margin-top:10px;font-size:14px}
+.tview summary{cursor:pointer;color:var(--muted)}
+.tscroll{max-height:240px;overflow:auto;margin-top:8px;border:1px solid var(--line);border-radius:8px}
+.tscroll table{border-collapse:collapse;width:100%}
+.tscroll th,.tscroll td{text-align:left;padding:6px 12px;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
+.tscroll thead th{position:sticky;top:0;background:var(--surface);border-top:0;font-weight:600}
+.tscroll td:last-child,.tscroll th:last-child{text-align:right}
+.dlist{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column}
+.dlrow{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;padding:10px 0;border-top:1px solid var(--line)}
+.dlrow:first-child{border-top:0}
+.dlname{display:flex;flex-wrap:wrap;gap:2px 10px;align-items:baseline;min-width:0}
+.dlname .c{font:400 13px var(--font-mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.dlact{display:flex;flex-wrap:wrap;gap:8px}
+
+/* share and feedback */
+.spread{display:grid;grid-template-columns:1fr 1fr;gap:20px 28px}
+@media (max-width:640px){.spread{grid-template-columns:1fr}}
+.spreadcol{display:flex;flex-direction:column;gap:10px;min-width:0}
+.spreadcol p{margin:0}
+.spread h2{color:var(--ink);font-size:17px}
+.sharebar{display:flex;flex-wrap:wrap;gap:8px}
+.copyrow{display:flex;gap:8px}
+.copyrow .btn{white-space:nowrap;flex:none}
+.copyrow .search{min-width:0}
+a.btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;color:var(--ink)}
+a.btn.primary{color:var(--accent-ink)}
+.site-foot a.btn{color:var(--ink);font-weight:500}
+.site-foot a.btn.primary{color:var(--accent-ink)}
+.site-foot a.btn:hover{text-decoration:none}
+
+/* diagnostics */
+.diag{padding:12px 16px}
+.diag summary{font-weight:500}
+.diaglist{margin:10px 0 14px;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted);overflow-wrap:anywhere}
+.diagcheck{display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)}
+.diagcounts{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:10px;font-size:14px}
+.diagcounts strong{font-weight:600}
+.countrow{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* footer */
+.site-foot{border-top:1px solid var(--line);padding-top:20px;display:flex;flex-direction:column;gap:14px;font-size:13px;color:var(--muted)}
+.site-foot a{color:var(--accent);text-decoration:none;font-weight:500}
+.site-foot a:hover{text-decoration:underline}
+.policy{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 16px}
+.policy summary{color:var(--ink)}
+.policy h3{font:600 14px var(--font-display);color:var(--ink);margin:16px 0 4px}
+.policy p+p{margin-top:6px}
+.credit{color:var(--ink);font-size:14px}
+
+/* other lists */
+.search{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:9px 12px;min-height:40px}
+.plain li{display:flex;justify-content:space-between;gap:12px;padding:9px 14px;border-top:1px solid var(--line);align-items:center}
+.plain li:first-child{border-top:0}
+.plain a{font:500 15px var(--font-mono);color:var(--accent);text-decoration:none;overflow-wrap:anywhere}
+.plain a:hover{text-decoration:underline}
+.plain .meta{font-size:13px;color:var(--muted);white-space:nowrap}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Unfollow Queue for Instagram</h1>
+    <p class="lede">Find out who you follow that doesn't follow you back, then unfollow them yourself in small batches, one tap at a time.</p>
+  </header>
+
+  <section class="card load" aria-label="Load your Instagram export">
+    <label class="drop" id="drop" for="file">
+      <strong>Choose your Instagram export</strong>
+      <span>or drop the .zip here. You can also drop followers_1.json and following.json.</span>
+    </label>
+    <input class="vh" id="file" type="file" multiple accept=".zip,.json,.html,.htm">
+    <div class="status" id="status" role="status"></div>
+    <p class="privacy">Your file is read inside this page and is not uploaded anywhere. The page remembers only which usernames you have clicked, in this browser. <button class="linklike" id="policyLink" type="button">Read the privacy policy</button></p>
+    <details>
+      <summary>How to get the export</summary>
+      <ol>
+        <li>In Instagram, open <b>Settings</b>, then <b>Accounts Center</b>, then <b>Your information and permissions</b>, then <b>Export your information</b>.</li>
+        <li>Choose <b>Create export</b>, pick your account and select <b>Export to device</b>.</li>
+        <li>Under <b>Customize information</b>, tick only <b>Followers and following</b>.</li>
+        <li>Set the date range to <b>All time</b> and the format to <b>JSON</b>.</li>
+        <li>Instagram emails you a link when the file is ready. This can take from a few minutes to a few hours.</li>
+      </ol>
+      <p class="hint" style="margin-top:8px">Menu names change from time to time. The export is a snapshot, so request a new one whenever you want fresh numbers.</p>
+    </details>
+  </section>
+
+  <div id="results" style="display:flex;flex-direction:column;gap:18px">
+    <div class="sample-note" id="sampleNote" hidden>Example data. Links are switched off here. Load your own export above to replace it.</div>
+
+    <div class="sample-note" id="partialWarn" role="alert" hidden></div>
+
+    <div class="stats" id="stats"></div>
+
+    <details class="card fold" id="growth">
+      <summary><span>Follow-back rate and growth</span><span class="sumnote" id="growthNote"></span></summary>
+      <div class="rates" id="rates"></div>
+      <div class="chart-head">
+        <strong id="chartTitle">New followers per month</strong>
+        <div class="seg" role="group" aria-label="Group by">
+          <button id="unitMonth" type="button" aria-pressed="true">Months</button>
+          <button id="unitYear" type="button" aria-pressed="false">Years</button>
+        </div>
+      </div>
+      <div class="chartbox" id="chartbox">
+        <div class="ctip" id="chartTip" hidden></div>
+      </div>
+      <p class="empty" id="chartNone" hidden>The file has no follow dates, so there is nothing to draw.</p>
+      <p class="chartread" id="chartRead" role="status"></p>
+      <p class="hint">Counts only people who still follow you, grouped by the month they followed. Followers who left are not in the file.</p>
+      <details class="tview">
+        <summary>See the numbers as a table</summary>
+        <div class="tscroll"><table id="chartTable"></table></div>
+      </details>
+    </details>
+
+    <details class="card fold" id="dl" open hidden>
+      <summary><span>Download your lists</span><span class="sumnote">CSV for Excel or Google Sheets</span></summary>
+      <p class="hint" style="margin-top:10px">The files are made inside this page and saved on your device. Nothing is uploaded. Save the full following list before you unfollow anyone, as a backup.</p>
+      <ul class="dlist" id="dlList"></ul>
+      <p class="hint" id="dlStatus" role="status"></p>
+    </details>
+
+    <details class="card diag" id="diag" hidden>
+      <summary>Check the numbers</summary>
+      <div id="diagBody"></div>
+      <label class="diagcheck" for="diagInput">Look up a username in your lists
+        <input class="search" id="diagInput" type="text" placeholder="username" autocomplete="off" autocapitalize="off" spellcheck="false">
+      </label>
+      <p class="hint" id="diagResult" role="status"></p>
+      <div class="diagcounts">
+        <strong>Compare with the numbers on your Instagram profile</strong>
+        <div class="countrow">
+          <label class="diagcheck" for="igFollowing">Following
+            <input class="search" id="igFollowing" type="number" inputmode="numeric" min="0" placeholder="Count in the app" autocomplete="off">
+          </label>
+          <label class="diagcheck" for="igFollowers">Followers
+            <input class="search" id="igFollowers" type="number" inputmode="numeric" min="0" placeholder="Count in the app" autocomplete="off">
+          </label>
+        </div>
+        <ul class="diaglist" id="countResult" style="margin:0" role="status"></ul>
+      </div>
+    </details>
+
+    <div class="tabs" role="tablist" id="tabs"></div>
+
+    <section id="queue" hidden>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="counter" id="counter" title="Opened means you tapped the profile link. The page cannot see what you do on Instagram.">
+          <div class="counter-main"><span class="big" id="leftNum">0</span><span>left of <b id="totalNum">0</b> in the queue</span></div>
+          <div class="track"><i id="overallFill"></i></div>
+          <p class="counter-sub" id="counterSub"></p>
+        </div>
+
+        <div class="controls">
+          <label for="size">Batch size
+            <select id="size"><option>10</option><option>20</option><option>30</option><option>50</option></select>
+          </label>
+          <label for="pause">Pause between clicks
+            <select id="pause"><option value="15">15 s</option><option value="30">30 s</option><option value="60">60 s</option><option value="90">90 s</option></select>
+          </label>
+          <label for="sort">Order
+            <select id="sort"><option value="old">Oldest follows first</option><option value="new">Newest follows first</option><option value="az">A to Z</option></select>
+          </label>
+        </div>
+
+        <div class="tip" id="renameTip" hidden>
+          <span id="renameTipText"></span>
+          <button class="btn small" id="renameTipBtn" type="button">Check them first</button>
+        </div>
+
+        <div class="bar">
+          <div class="clock"><span class="lbl">Since last click</span><span class="time" id="clock">--:--</span></div>
+          <span class="chip ready" id="chip">Ready</span>
+          <div class="prog"><span id="progText">0 of 30 done</span><div class="track"><i id="fill"></i></div></div>
+        </div>
+
+        <ol class="rows" id="rows"></ol>
+
+        <div class="note" id="batchDone" hidden></div>
+
+        <div class="batchnav">
+          <button class="btn" id="prev" type="button">Previous batch</button>
+          <span class="lbl" id="batchLabel"></span>
+          <button class="btn primary" id="next" type="button">Next batch</button>
+        </div>
+
+        <p class="hint">Instagram does not publish how many unfollows it allows. Short batches with long breaks in between are the careful way to do it.</p>
+        <p class="hint">If a profile says the page isn't available, or shows <b>Follow</b> instead of <b>Following</b>, you are not following it. Tap <b>Not following</b> on that row to set it aside.</p>
+
+        <div class="foot">
+          <details id="keptBox" hidden>
+            <summary id="keptSummary">Kept accounts</summary>
+            <ul class="keptlist" id="keptList"></ul>
+          </details>
+          <button class="linklike" id="reset" type="button">Reset progress</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="renamePanel" hidden>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <p class="renintro">Each row is an account you follow that does not follow you, next to a follower with a similar name. If the old name no longer exists, it may be the same person after a rename. Open both profiles to check. If it is the same person, tap <b>Same account</b> and the old name leaves your unfollow queue. This list is a guess from spelling only, and deleted accounts cannot be found this way.</p>
+        <ul class="renlist" id="renameList"></ul>
+        <p class="empty" id="renameNone" hidden>No similar names found.</p>
+        <button class="btn" id="renameMore" type="button" hidden>Show more</button>
+      </div>
+    </section>
+
+    <section id="listPanel" hidden>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <p class="hint" id="listNote" hidden>This is the following list from your file, without the accounts you set aside as not following. Instagram's own Following screen has the final say.</p>
+        <input class="search" id="search" type="search" placeholder="Search usernames" aria-label="Search usernames" autocomplete="off">
+        <ul class="rows plain" id="plain" style="list-style:none;margin:0;padding:0"></ul>
+        <button class="btn" id="more" type="button" hidden>Show more</button>
+      </div>
+    </section>
+  </div>
+
+  <footer class="site-foot">
+    <section class="spread" aria-label="Share and feedback">
+      <div class="spreadcol">
+        <h2>Know someone who needs this?</h2>
+        <p>Send them the link. It is free, and nothing is uploaded.</p>
+        <div class="sharebar">
+          <button class="btn primary" id="shNative" type="button" hidden>Share with a friend</button>
+          <a class="btn" id="shWa" href="#" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+          <a class="btn" id="shTg" href="#" target="_blank" rel="noopener noreferrer">Telegram</a>
+          <a class="btn" id="shFb" href="#" target="_blank" rel="noopener noreferrer">Facebook</a>
+          <a class="btn" id="shX" href="#" target="_blank" rel="noopener noreferrer">X</a>
+        </div>
+        <div class="copyrow">
+          <input class="search" id="shareUrl" type="text" readonly aria-label="Link to share">
+          <button class="btn" id="shCopy" type="button">Copy link</button>
+        </div>
+        <p class="hint" id="shareStatus" role="status"></p>
+      </div>
+      <div class="spreadcol">
+        <h2>Ideas, problems or questions?</h2>
+        <p>Suggest an idea, report a problem or ask a question.</p>
+        <div class="sharebar">
+          <a class="btn primary" id="fbLink" href="#" target="_blank" rel="noopener noreferrer">Send feedback</a>
+          <button class="btn" id="fbCopy" type="button">Copy details for my message</button>
+        </div>
+        <p class="hint">The details are only counts and file names, never usernames. Paste them into your message if something went wrong.</p>
+        <p class="hint" id="fbEmailRow" hidden>Or write to <a id="fbEmail" href="#"></a></p>
+        <p class="hint" id="fbStatus" role="status"></p>
+      </div>
+    </section>
+
+    <p>Unfollow Queue for Instagram is an independent tool. It is not affiliated with, endorsed by or sponsored by Instagram or Meta Platforms, Inc. Instagram is a trademark of Meta Platforms, Inc.</p>
+
+    <details class="policy" id="policy">
+      <summary>Privacy policy</summary>
+      <p style="margin-top:10px">Last updated 17 October 2026. This is a plain-language description of what this page does with your information.</p>
+
+      <h3>What you give the page</h3>
+      <p>You choose your Instagram data export (a ZIP, or the followers and following files from it). The page reads the file inside your own browser and compares the two lists there. The file and the usernames in it are never sent to the page's author or to any server run by the page.</p>
+
+      <h3>What the page stores</h3>
+      <p>The page saves the usernames you have clicked, chosen to keep or marked as not following or renamed, the time of each click, the profile counts you may type into "Check the numbers", and your settings (batch size, pause, order) in your browser's local storage on your own device. It does not store your lists, your export file or your Instagram login. There are no accounts, and the page does not set cookies or run analytics.</p>
+      <p>You can delete the saved data at any time with "Reset progress" at the bottom of the queue, or by clearing this site's data in your browser settings.</p>
+
+      <h3>Login details</h3>
+      <p>The page never asks for your Instagram username or password and never connects to your Instagram account. You do every unfollow yourself on Instagram.</p>
+
+      <h3>Other services involved</h3>
+      <p>To work, the page loads a ZIP-reading library from cdnjs (Cloudflare) and fonts from Google Fonts. Those providers receive your IP address and standard browser details when the page loads, as with any website, and handle them under their own policies. The company that hosts this page may also keep ordinary server logs.</p>
+      <p>When you tap a username, Instagram opens in a new tab. Instagram's own terms and privacy policy apply there.</p>
+
+      <h3>Downloads, sharing and feedback</h3>
+      <p>The CSV files are created inside your browser from the lists the page already holds, and they are saved on your own device. They are not sent anywhere. The share buttons open WhatsApp, Telegram, Facebook or X in a new tab, or your device's share menu, only when you click them, and those services handle your visit under their own policies. The feedback button opens a feedback form hosted by Zoho, which handles what you type there under its own policy. Nothing is sent unless you submit it. "Copy details for my message" copies counts and file names to your clipboard, never usernames, and only when you click it.</p>
+
+      <h3>Children</h3>
+      <p>The page is meant for people old enough to hold an Instagram account under Instagram's rules.</p>
+
+      <h3>Changes and contact</h3>
+      <p>This policy may change, and the date above will change with it. For questions, message <a href="https://www.instagram.com/katycrete/" target="_blank" rel="noopener noreferrer">@katycrete</a> on Instagram.</p>
+    </details>
+
+    <p class="credit">Created with 💙 by <a href="https://www.instagram.com/katycrete/" target="_blank" rel="noopener noreferrer">@katycrete</a></p>
+  </footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+// <core>
+const RESERVED = new Set(['accounts','explore','p','reel','reels','stories','direct','about','legal','developer','privacy','web','tv']);
+
+function cleanName(s){
+  if (typeof s !== 'string') return null;
+  s = s.trim().replace(/^@/, '');
+  return /^[A-Za-z0-9._]{1,30}$/.test(s) ? s : null;
+}
+function nameFromHref(h){
+  const m = /instagram\.com\/(?:_u\/)?([A-Za-z0-9._]+)/i.exec(h || '');
+  return m && !RESERVED.has(m[1].toLowerCase()) ? m[1] : null;
+}
+function fromJson(data){
+  let arr = Array.isArray(data) ? data : null;
+  if (!arr && data && typeof data === 'object'){
+    for (const k of Object.keys(data)){ if (Array.isArray(data[k])){ arr = data[k]; break; } }
+  }
+  const out = [];
+  if (!arr) return out;
+  for (const it of arr){
+    const sld = it && Array.isArray(it.string_list_data) ? it.string_list_data[0] : null;
+    const name = cleanName(sld && sld.value) || cleanName(it && it.title) || (sld && sld.href ? nameFromHref(sld.href) : null);
+    if (name) out.push({ name, key: name.toLowerCase(), ts: sld && Number.isFinite(sld.timestamp) ? sld.timestamp * 1000 : null });
+  }
+  return out;
+}
+function fromHtml(text){
+  const out = [], seen = new Set();
+  const re = /href="https?:\/\/(?:www\.)?instagram\.com\/(?:_u\/)?([A-Za-z0-9._]+)\/?"/gi;
+  let m;
+  while ((m = re.exec(text))){
+    const key = m[1].toLowerCase();
+    if (RESERVED.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ name: m[1], key, ts: null });
+  }
+  return out;
+}
+function kindOf(path){
+  const f = String(path).split('/').pop().toLowerCase();
+  if (/^followers_\d+\.(json|html?)$/.test(f)) return 'followers';
+  if (/^following\.(json|html?)$/.test(f)) return 'following';
+  return null;
+}
+function dedupe(list){
+  const map = new Map();
+  for (const x of list){
+    const old = map.get(x.key);
+    if (!old || (x.ts && (!old.ts || x.ts < old.ts))) map.set(x.key, x);
+  }
+  return [...map.values()];
+}
+function compare(followers, following){
+  const f = new Set(followers.map(x => x.key));
+  const g = new Set(following.map(x => x.key));
+  return {
+    notBack: following.filter(x => !f.has(x.key)),
+    fans: followers.filter(x => !g.has(x.key)),
+    mutual: following.filter(x => f.has(x.key))
+  };
+}
+// parts: [{kind, ext, text}]. JSON wins over HTML for the same kind.
+function buildFromParts(parts){
+  const res = {};
+  for (const kind of ['followers','following']){
+    const mine = parts.filter(p => p.kind === kind);
+    const useJson = mine.some(p => p.ext === 'json');
+    let all = [];
+    for (const p of mine){
+      if (useJson && p.ext !== 'json') continue;
+      if (p.ext === 'json'){ try { all = all.concat(fromJson(JSON.parse(p.text))); } catch(e){} }
+      else all = all.concat(fromHtml(p.text));
+    }
+    res[kind] = dedupe(all);
+  }
+  return res;
+}
+// ---- possible renames: guess from spelling which "not following back" accounts reappear as a follower
+function compact(s){ return s.toLowerCase().replace(/[._]/g, ''); }
+function maxEdits(len){ return len >= 5 ? Math.min(3, Math.floor(len * 0.2)) : 0; }
+function lev(a, b, max){
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev = new Array(b.length + 1), cur = new Array(b.length + 1);
+  for (let j = 0; j <= b.length; j++) prev[j] = j;
+  for (let i = 1; i <= a.length; i++){
+    cur[0] = i;
+    let rowMin = i;
+    for (let j = 1; j <= b.length; j++){
+      const c = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
+      const v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + c);
+      cur[j] = v;
+      if (v < rowMin) rowMin = v;
+    }
+    if (rowMin > max) return max + 1;
+    const t = prev; prev = cur; cur = t;
+  }
+  return prev[b.length];
+}
+// tier 3: same letters and digits, only dots/underscores/case differ
+// tier 2: one typo, or the same name with a few digits added
+// tier 1: a few characters apart (longer names only)
+function renameTier(a, b){
+  if (a === b) return 3;
+  const s = a.length <= b.length ? a : b, l = a.length <= b.length ? b : a;
+  if (s.length >= 5 && l.startsWith(s) && /^\d{1,4}$/.test(l.slice(s.length))) return 2;
+  const lim = maxEdits(l.length);
+  if (!lim) return 0;
+  const d = lev(a, b, lim);
+  return d > lim ? 0 : d <= 1 ? 2 : 1;
+}
+function findRenames(notBack, fans){
+  const byPre = new Map(), bySuf = new Map();
+  const fc = fans.map(f => compact(f.name));
+  fc.forEach((c, i) => {
+    if (c.length < 4) return;
+    const p = c.slice(0, 2), q = c.slice(-2);
+    (byPre.get(p) || byPre.set(p, []).get(p)).push(i);
+    (bySuf.get(q) || bySuf.set(q, []).get(q)).push(i);
+  });
+  const out = [];
+  for (const old of notBack){
+    const a = compact(old.name);
+    if (a.length < 4) continue;
+    const cand = new Set([...(byPre.get(a.slice(0, 2)) || []), ...(bySuf.get(a.slice(-2)) || [])]);
+    const found = [];
+    for (const i of cand){
+      const tier = renameTier(a, fc[i]);
+      if (tier) found.push({ fan: fans[i], tier });
+    }
+    if (!found.length) continue;
+    found.sort((x, y) => y.tier - x.tier || (x.fan.key < y.fan.key ? -1 : 1));
+    out.push({ old, cands: found.slice(0, 3), tier: found[0].tier });
+  }
+  out.sort((x, y) => y.tier - x.tier || (x.old.key < y.old.key ? -1 : 1));
+  return out;
+}
+
+// ---- CSV, growth series, chart ticks
+function csvCell(v){
+  let s = v == null ? '' : String(v);
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;      // stop spreadsheets from running a cell as a formula
+  return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function toCsv(header, rows){
+  return [header].concat(rows).map(r => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
+}
+function isoDate(ts){
+  if (!ts) return '';
+  const d = new Date(ts);
+  return isNaN(d) ? '' : d.toISOString().slice(0, 10);
+}
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+// new items per month (or year), with empty periods filled in so gaps show as zero
+function buildSeries(items, unit){
+  const ts = items.map(x => x.ts).filter(t => t > 0);
+  if (!ts.length) return [];
+  const counts = new Map();
+  let lo = Infinity, hi = -Infinity;
+  for (const t of ts){
+    const d = new Date(t);
+    const y = d.getUTCFullYear(), m = d.getUTCMonth();
+    const k = unit === 'year' ? y * 12 : y * 12 + m;
+    counts.set(k, (counts.get(k) || 0) + 1);
+    if (k < lo) lo = k; if (k > hi) hi = k;
+  }
+  const out = [], step = unit === 'year' ? 12 : 1;
+  for (let k = lo; k <= hi; k += step){
+    const y = Math.floor(k / 12), m = k % 12;
+    out.push({ key: k, count: counts.get(k) || 0, year: y, month: m,
+      label: unit === 'year' ? String(y) : MONTHS[m] + ' ' + y });
+  }
+  return out;
+}
+function niceTicks(max){
+  if (!(max > 0)) return [0, 1];
+  const target = 4, raw = max / target, pow = Math.pow(10, Math.floor(Math.log10(raw)));
+  const f = raw / pow, step = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * pow;
+  const out = [];
+  for (let v = 0; v < max + step; v += step){ out.push(v); if (v >= max) break; }
+  return out;
+}
+
+function partCount(p){
+  if (p.ext === 'json'){ try { return fromJson(JSON.parse(p.text)).length; } catch(e){ return -1; } }
+  return fromHtml(p.text).length;
+}
+// </core>
+
+(function(){
+  const $ = id => document.getElementById(id);
+  const STORE_KEY = 'unfollow-queue-v1';
+  const DEFAULTS = { clicked:{}, kept:{}, missing:{}, dismissed:{}, igFollowing:'', igFollowers:'', pause:30, size:30, sort:'old' };
+
+  let state = Object.assign({}, DEFAULTS, { clicked:{}, kept:{}, missing:{}, dismissed:{} });
+  let data = null;          // {followers, following, notBack, fans, mutual, sample}
+  let tab = 'notback';
+  let batchIdx = 0;
+  let shown = 100;
+
+  function loadState(){
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (raw){
+        const s = JSON.parse(raw);
+        return Object.assign({}, DEFAULTS, s, { clicked: s.clicked || {}, kept: s.kept || {}, missing: s.missing || {}, dismissed: s.dismissed || {} });
+      }
+    } catch(e){}
+    return Object.assign({}, DEFAULTS, { clicked:{}, kept:{}, missing:{}, dismissed:{} });
+  }
+  function saveState(){
+    if (!data || data.sample) return;
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch(e){}
+  }
+
+  /* ---------- helpers ---------- */
+  const fmtN = n => n.toLocaleString();
+  function fmtDur(ms){
+    const s = Math.max(0, Math.floor(ms / 1000));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+    const p = x => String(x).padStart(2, '0');
+    return h ? `${h}:${p(m)}:${p(r)}` : `${p(m)}:${p(r)}`;
+  }
+  const fmtClock = t => new Date(t).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+  const fmtSince = t => t ? new Date(t).toLocaleDateString(undefined, { month:'short', year:'numeric' }) : '';
+  function el(tag, cls, text){
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  const profileUrl = name => `https://www.instagram.com/${name}/`;
+
+  /* ---------- sample ---------- */
+  function makeSample(){
+    const stems = ['atelier','bakery','coach','studio','trail','darkroom','garden','print','ceramics','vinyl'];
+    const mk = (pre, i) => `${pre}_${stems[i % stems.length]}_${String(i + 1).padStart(3,'0')}`;
+    const start = Date.UTC(2019, 2, 1);
+    const following = [], followers = [];
+    for (let i = 0; i < 140; i++){
+      const name = mk('sample', i);
+      const o = { name, key:name, ts: start + i * 14 * 86400000 };
+      following.push(o);
+      if (i % 2 === 0) followers.push({ name, key:name, ts: o.ts + 3 * 86400000 });
+    }
+    for (let i = 0; i < 40; i++){
+      const name = mk('reader', i);
+      followers.push({ name, key:name, ts: start + i * 20 * 86400000 });
+    }
+    // three renamed accounts: the old name is followed, the new name follows back
+    [['nikos.photo','nikos_photo'], ['elena_bakes','elenabakes22'], ['mara_ceramics','mara_ceramic']].forEach(([oldName, newName], i) => {
+      const ts = start + (150 + i) * 14 * 86400000;
+      following.push({ name:oldName, key:oldName, ts });
+      followers.push({ name:newName, key:newName, ts: ts + 5 * 86400000 });
+    });
+    return Object.assign({ followers, following, sample:true }, compare(followers, following));
+  }
+
+  /* ---------- loading files ---------- */
+  async function readFiles(files){
+    const parts = [], used = [], skipped = [];
+    for (const f of files){
+      const lower = f.name.toLowerCase();
+      if (lower.endsWith('.zip')){
+        if (typeof JSZip === 'undefined') throw new Error('The ZIP reader did not load. Unzip the file and drop followers_1.json and following.json instead.');
+        const zip = await JSZip.loadAsync(f);
+        const jobs = [];
+        zip.forEach((path, entry) => {
+          if (entry.dir) return;
+          const kind = kindOf(path);
+          if (!kind){
+            if (/follow/i.test(path) && /\.(json|html?)$/i.test(path)) skipped.push(path);
+            return;
+          }
+          const ext = path.toLowerCase().endsWith('.json') ? 'json' : 'html';
+          jobs.push(entry.async('string').then(text => { parts.push({ kind, ext, text, name: path }); used.push(path.split('/').pop()); }));
+        });
+        await Promise.all(jobs);
+      } else {
+        const kind = kindOf(f.name);
+        if (!kind){
+          if (/follow/i.test(f.name)) skipped.push(f.name);
+          continue;
+        }
+        const ext = lower.endsWith('.json') ? 'json' : 'html';
+        parts.push({ kind, ext, text: await f.text(), name: f.name });
+        used.push(f.name);
+      }
+    }
+    return { parts, used, skipped };
+  }
+
+  async function loadFiles(fileList){
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    const st = $('status');
+    st.className = 'status';
+    st.textContent = 'Reading your file...';
+    try {
+      const { parts, used, skipped } = await readFiles(files);
+      const built = buildFromParts(parts);
+      const diag = {
+        files: parts.map(p => ({ name: p.name, kind: p.kind, ext: p.ext, count: partCount(p) }))
+                    .sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
+        skipped: skipped.slice().sort()
+      };
+      if (!built.followers.length && !built.following.length){
+        throw new Error('No followers or following list found in that file. In the export, tick "Followers and following" and choose JSON.');
+      }
+      if (!built.followers.length) throw new Error('Found your following list but not your followers (followers_1.json). Export again with "Followers and following" ticked.');
+      if (!built.following.length) throw new Error('Found your followers but not your following list (following.json). Export again with "Followers and following" ticked.');
+      data = Object.assign({ sample:false, diag }, built, compare(built.followers, built.following));
+      $('diagInput').value = '';
+      $('diagResult').textContent = '';
+      state = loadState();
+      tab = 'notback';
+      batchIdx = firstOpenBatch();
+      st.textContent = `Read ${used.length} file${used.length === 1 ? '' : 's'}: ${[...new Set(used)].sort().join(', ')}`;
+      renderAll();
+      try { $('results').scrollIntoView({ block:'start' }); } catch(e){}
+    } catch(e){
+      st.className = 'status err';
+      st.textContent = e.message || 'Could not read that file.';
+    }
+  }
+
+  /* ---------- queue logic ---------- */
+  function queue(){
+    let list = data.notBack.filter(x => !state.kept[x.key] && !state.missing[x.key]);
+    if (state.sort === 'az') list = list.slice().sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
+    else if (state.sort === 'new') list = list.slice().sort((a, b) => (b.ts || 0) - (a.ts || 0));
+    else list = list.slice().sort((a, b) => (a.ts || 0) - (b.ts || 0));
+    return list;
+  }
+  function firstOpenBatch(){
+    const list = queue(), size = +state.size;
+    const i = list.findIndex(x => !state.clicked[x.key]);
+    return i < 0 ? 0 : Math.floor(i / size);
+  }
+  function lastClick(){
+    let m = 0;
+    for (const k in state.clicked) if (state.clicked[k] > m) m = state.clicked[k];
+    return m;
+  }
+
+  /* ---------- rendering ---------- */
+  function renderAll(){
+    if (!data.renames) data.renames = findRenames(data.notBack, data.fans);
+    $('sampleNote').hidden = !data.sample;
+    renderWarn();
+    renderStats();
+    renderGrowth();
+    renderDiag();
+    renderTabs();
+    renderPanel();
+  }
+  function renderStats(){
+    const box = $('stats');
+    box.replaceChildren();
+    const items = [
+      ['Following', data.following.length, false],
+      ['Followers', data.followers.length, false],
+      ["Don't follow back", data.notBack.length, true],
+      ['Fans', data.fans.length, false]
+    ];
+    for (const [k, v, hot] of items){
+      const s = el('div', 'stat' + (hot ? ' hot' : ''));
+      s.append(el('span', 'k', k), el('span', 'v', fmtN(v)));
+      box.append(s);
+    }
+  }
+  // The export has a date range. If the followers file starts long after the first account
+  // you followed, it was probably exported for a shorter period than "All time".
+  function renderWarn(){
+    const w = $('partialWarn');
+    w.hidden = true;
+    if (!data || data.sample) return;
+    const fs_ = data.followers.map(x => x.ts).filter(Boolean);
+    const gs_ = data.following.map(x => x.ts).filter(Boolean);
+    if (!fs_.length || !gs_.length) return;
+    const fMin = Math.min(...fs_), gMin = Math.min(...gs_);
+    if (fMin - gMin <= 180 * 86400000) return;
+    w.hidden = false;
+    w.textContent = `Your followers list only goes back to ${fmtSince(fMin)}, but you have followed accounts since ${fmtSince(gMin)}. The export probably covers only part of your history, so many accounts below may follow you back and still be listed. Export again with the date range set to All time before you unfollow anyone.`;
+  }
+
+  function renderDiag(){
+    const box = $('diag');
+    if (!data || data.sample){ box.hidden = true; return; }
+    box.hidden = false;
+    const d = data.diag;
+    const body = $('diagBody');
+    body.replaceChildren();
+    const ul = el('ul', 'diaglist');
+    const add = t => ul.append(el('li', null, t));
+    for (const f of d.files){
+      add(`${f.name}: ${f.count < 0 ? 'could not be read' : fmtN(f.count) + ' usernames'} (${f.kind})`);
+    }
+    const nF = d.files.filter(f => f.kind === 'followers').length;
+    const nG = d.files.filter(f => f.kind === 'following').length;
+    add(`Used in total: ${fmtN(data.followers.length)} followers from ${nF} file${nF === 1 ? '' : 's'}, ${fmtN(data.following.length)} following from ${nG} file${nG === 1 ? '' : 's'}.`);
+    const stamps = data.followers.map(x => x.ts).filter(Boolean);
+    if (stamps.length){
+      add(`Followers in the file were added between ${fmtSince(Math.min(...stamps))} and ${fmtSince(Math.max(...stamps))}. If the first month is much later than when you got your first follower, the export covers only part of your history. Export again with the date range set to All time.`);
+    }
+    if (d.skipped.length){
+      add(`Files with "follow" in the name that were not used: ${d.skipped.join(', ')}`);
+    }
+    body.append(ul);
+    $('igFollowing').value = state.igFollowing || '';
+    $('igFollowers').value = state.igFollowers || '';
+  }
+
+  function renderTabs(){
+    const box = $('tabs');
+    box.replaceChildren();
+    const defs = [
+      ['notback', "Don't follow back", data.notBack.filter(x => !state.kept[x.key] && !state.missing[x.key]).length],
+      ['renames', 'Possible renames', visibleRenames().length],
+      ['following', 'Following', currentFollowing().length],
+      ['fans', 'Fans', data.fans.length],
+      ['mutual', 'Mutual', data.mutual.length]
+    ];
+    for (const [id, label, count] of defs){
+      const b = el('button', 'tab');
+      b.type = 'button';
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-selected', String(tab === id));
+      b.append(document.createTextNode(label), el('span', 'c', fmtN(count)));
+      b.addEventListener('click', () => { tab = id; shown = 100; $('search').value = ''; renderTabs(); renderPanel(); });
+      box.append(b);
+    }
+    renderCounts();
+    renderDownloads();
+  }
+  function renderPanel(){
+    $('queue').hidden = tab !== 'notback';
+    $('renamePanel').hidden = tab !== 'renames';
+    $('listPanel').hidden = tab === 'notback' || tab === 'renames';
+    if (tab === 'notback') renderQueue();
+    else if (tab === 'renames') renderRenames();
+    else renderPlain();
+  }
+
+  /* ---------- possible renames ---------- */
+  const TIER_LABEL = { 3:'Same letters', 2:'Very close', 1:'Similar' };
+  // the file's following list without the accounts you have set aside as not following
+  function currentFollowing(){
+    return data.following.filter(x => !state.missing[x.key]);
+  }
+  // compare the file with the counts shown on the real Instagram profile
+  function renderCounts(){
+    if (!data || data.sample) return;
+    const ul = $('countResult');
+    ul.replaceChildren();
+    const add = t => ul.append(el('li', null, t));
+    const fg = parseInt(state.igFollowing, 10), fr = parseInt(state.igFollowers, 10);
+    if (fg > 0){
+      const inFile = data.following.length, diff = inFile - fg;
+      const aside = data.notBack.filter(x => state.missing[x.key] && state.missing[x.key] !== 'renamed').length;
+      if (Math.abs(diff) <= 3) add(`Following: the file lists ${fmtN(inFile)} and Instagram says ${fmtN(fg)}. That matches within a few.`);
+      else if (diff > 0) add(`Following: the file lists ${fmtN(inFile)} but Instagram says ${fmtN(fg)}. About ${fmtN(diff)} entries in the file are not in your real following list, for example deleted or deactivated accounts. You have set aside ${fmtN(aside)} so far${aside < diff ? `, so about ${fmtN(diff - aside)} more are probably still in your queue` : ''}.`);
+      else add(`Following: Instagram says ${fmtN(fg)} but the file lists ${fmtN(inFile)}. The file may be out of date or incomplete. Export again with the date range set to All time.`);
+    }
+    if (fr > 0){
+      const inFile = data.followers.length, diff = fr - inFile;
+      if (Math.abs(diff) <= 3) add(`Followers: the file lists ${fmtN(inFile)} and Instagram says ${fmtN(fr)}. That matches within a few.`);
+      else if (diff > 0) add(`Followers: Instagram says ${fmtN(fr)} but the file lists ${fmtN(inFile)}. About ${fmtN(diff)} followers are missing from the file, so some accounts may show as not following back although they follow you. Export again with the date range set to All time.`);
+      else add(`Followers: the file lists ${fmtN(inFile)} and Instagram says ${fmtN(fr)}. The file has about ${fmtN(-diff)} more.`);
+    }
+  }
+  function visibleRenames(){
+    return (data.renames || []).filter(r => !state.kept[r.old.key] && !state.missing[r.old.key] && !state.dismissed[r.old.key]);
+  }
+  function profLink(name){
+    const a = el('a', null, '@' + name);
+    a.href = data.sample ? '#' : profileUrl(name);
+    if (!data.sample){ a.target = '_blank'; a.rel = 'noopener noreferrer'; }
+    else a.addEventListener('click', ev => ev.preventDefault());
+    return a;
+  }
+  function makeRename(r){
+    const li = el('li', 'ren');
+    const top = r.cands[0];
+    const line = el('div', 'ren-line');
+    line.append(profLink(r.old.name), el('span', 'arrow', '→'), profLink(top.fan.name), el('span', 'conf t' + r.tier, TIER_LABEL[r.tier]));
+    li.append(line);
+    const sub = el('div', 'ren-sub');
+    sub.append(document.createTextNode('Old name in your following list, then a follower with a similar name.'));
+    if (r.cands.length > 1){
+      sub.append(document.createTextNode(' Also similar: '));
+      r.cands.slice(1).forEach((c, i) => {
+        if (i) sub.append(document.createTextNode(', '));
+        sub.append(profLink(c.fan.name));
+      });
+    }
+    li.append(sub);
+    const act = el('div', 'ren-act');
+    const same = el('button', 'btn small', 'Same account'); same.type = 'button';
+    same.title = 'It is the same person after a rename. They follow you, so remove the old name from the unfollow queue.';
+    same.addEventListener('click', () => { state.missing[r.old.key] = 'renamed'; saveState(); renderTabs(); renderRenames(); });
+    const diff = el('button', 'btn small', 'Different person'); diff.type = 'button';
+    diff.title = 'Not the same person. Hide this suggestion and keep the account in the unfollow queue.';
+    diff.addEventListener('click', () => { state.dismissed[r.old.key] = 1; saveState(); renderTabs(); renderRenames(); });
+    act.append(same, diff);
+    li.append(act);
+    return li;
+  }
+  function renderRenames(){
+    const list = visibleRenames();
+    const ul = $('renameList');
+    ul.replaceChildren();
+    list.slice(0, shown).forEach(r => ul.append(makeRename(r)));
+    ul.hidden = list.length === 0;
+    $('renameNone').hidden = list.length > 0;
+    const more = $('renameMore');
+    more.hidden = list.length <= shown;
+    more.textContent = `Show more (${fmtN(list.length - shown)} left)`;
+  }
+
+  function renderQueue(){
+    $('size').value = String(state.size);
+    $('pause').value = String(state.pause);
+    $('sort').value = state.sort;
+
+    const list = queue(), size = +state.size;
+    const total = Math.max(1, Math.ceil(list.length / size));
+    batchIdx = Math.min(Math.max(0, batchIdx), total - 1);
+    const slice = list.slice(batchIdx * size, (batchIdx + 1) * size);
+
+    const rows = $('rows');
+    rows.replaceChildren();
+    if (!slice.length){
+      const li = el('li', 'empty', 'Everyone you follow follows you back, or you have kept every account.');
+      rows.append(li);
+    }
+    slice.forEach((it, i) => rows.append(makeRow(it, batchIdx * size + i + 1)));
+
+    $('batchLabel').textContent = `Batch ${batchIdx + 1} of ${total}`;
+    $('prev').disabled = batchIdx === 0;
+    $('next').disabled = batchIdx >= total - 1;
+    renderKept();
+    const strong = visibleRenames().filter(r => r.tier >= 2).length;
+    $('renameTip').hidden = strong === 0;
+    $('renameTipText').textContent = `${fmtN(strong)} account${strong === 1 ? '' : 's'} in your queue ${strong === 1 ? 'has' : 'have'} a follower with a very close name. ${strong === 1 ? 'It' : 'They'} may be renamed and still follow you.`;
+    refreshQueue();
+  }
+
+  function makeRow(it, n){
+    const li = el('li', 'row');
+    li.dataset.key = it.key;
+    const num = el('span', 'n', String(n).padStart(2, '0'));
+    const a = el('a', 'user', '@' + it.name);
+    a.href = data.sample ? '#' : profileUrl(it.name);
+    if (!data.sample){ a.target = '_blank'; a.rel = 'noopener noreferrer'; }
+    const onOpen = ev => {
+      if (data.sample) ev.preventDefault();
+      markClicked(it.key);
+    };
+    a.addEventListener('click', onOpen);
+    a.addEventListener('auxclick', ev => { if (ev.button === 1) onOpen(ev); });
+    const meta = el('span', 'meta', it.ts ? 'Followed ' + fmtSince(it.ts) : '');
+    const act = el('span', 'act');
+    const tag = el('span', 'tag', 'Next');
+    const when = el('span', 'when'); when.hidden = true;
+    const undo = el('button', 'btn small', 'Undo'); undo.type = 'button'; undo.hidden = true;
+    undo.addEventListener('click', () => { delete state.clicked[it.key]; saveState(); refreshQueue(); });
+    const nf = el('button', 'btn small', 'Not following'); nf.type = 'button'; nf.hidden = true;
+    nf.title = 'The page is not available, or the profile shows Follow instead of Following. Set it aside.';
+    nf.addEventListener('click', () => { state.missing[it.key] = 1; saveState(); renderTabs(); renderQueue(); });
+    const keep = el('button', 'btn small', 'Keep'); keep.type = 'button';
+    keep.title = 'Keep following this account and remove it from the queue';
+    keep.addEventListener('click', () => { state.kept[it.key] = 1; saveState(); renderTabs(); renderQueue(); });
+    act.append(tag, when, undo, nf, keep);
+    li.append(num, a, meta, act);
+    return li;
+  }
+
+  function markClicked(key){
+    state.clicked[key] = Date.now();
+    saveState();
+    // update in place so the link keeps working; no rebuild during the click
+    refreshQueue();
+  }
+
+  function refreshQueue(){
+    const rows = $('rows').querySelectorAll('.row[data-key]');
+    let done = 0, nextSet = false;
+    rows.forEach(li => {
+      const t = state.clicked[li.dataset.key];
+      const isDone = !!t;
+      li.classList.toggle('done', isDone);
+      const when = li.querySelector('.when');
+      const btns = li.querySelectorAll('button');
+      when.hidden = !isDone;
+      when.textContent = isDone ? 'Clicked ' + fmtClock(t) : '';
+      btns[0].hidden = !isDone;      // undo
+      btns[1].hidden = !isDone;      // not found
+      btns[2].hidden = isDone;       // keep
+      if (isDone) done++;
+      const isNext = !isDone && !nextSet;
+      if (isNext) nextSet = true;
+      li.classList.toggle('next', isNext);
+    });
+    const n = rows.length;
+    renderCounter();
+    $('progText').textContent = `${done} of ${n} done`;
+    $('fill').style.width = n ? (done / n * 100) + '%' : '0%';
+
+    const bd = $('batchDone');
+    const batchFinished = n > 0 && done === n;
+    const more = !$('next').disabled;
+    bd.hidden = !batchFinished;
+    if (batchFinished){
+      bd.textContent = more
+        ? 'Batch finished. Take a break before you start the next one. The timer above shows how long it has been.'
+        : 'All batches finished.';
+    }
+    tick();
+  }
+
+  function renderKept(){
+    const aside = [];
+    for (const it of data.notBack){
+      if (state.kept[it.key]) aside.push({ it, why: 'kept' });
+      else if (state.missing[it.key]) aside.push({ it, why: state.missing[it.key] === 'renamed' ? 'renamed' : 'not following' });
+    }
+    const box = $('keptBox');
+    box.hidden = aside.length === 0;
+    $('keptSummary').textContent = `Set aside (${aside.length})`;
+    const ul = $('keptList');
+    ul.replaceChildren();
+    for (const { it, why } of aside){
+      const li = el('li');
+      li.append(el('span', null, `@${it.name} (${why})`));
+      const b = el('button', 'btn small', 'Restore'); b.type = 'button';
+      b.addEventListener('click', () => {
+        delete state.kept[it.key];
+        if (state.missing[it.key]){ delete state.missing[it.key]; delete state.clicked[it.key]; }
+        saveState(); renderTabs(); renderQueue();
+      });
+      li.append(b);
+      ul.append(li);
+    }
+  }
+
+  function tick(){
+    if (!data) return;
+    const lc = lastClick();
+    const clock = $('clock'), chip = $('chip');
+    if (!lc){
+      clock.textContent = '--:--';
+      chip.className = 'chip ready';
+      chip.textContent = 'Ready';
+      return;
+    }
+    const el_ = Date.now() - lc;
+    clock.textContent = fmtDur(el_);
+    const left = Math.ceil(+state.pause - el_ / 1000);
+    if (left > 0){
+      chip.className = 'chip wait';
+      chip.textContent = `Wait ${left} s`;
+    } else {
+      chip.className = 'chip ready';
+      chip.textContent = 'Ready';
+    }
+  }
+
+  function renderPlain(){
+    const list = tab === 'fans' ? data.fans : tab === 'following' ? currentFollowing() : data.mutual;
+    $('listNote').hidden = tab !== 'following';
+    const q = $('search').value.trim().toLowerCase();
+    const filtered = q ? list.filter(x => x.key.includes(q)) : list;
+    const ul = $('plain');
+    ul.replaceChildren();
+    if (!filtered.length){
+      ul.append(el('li', 'empty', q ? 'No usernames match that search.' : 'Nothing here.'));
+    }
+    filtered.slice(0, shown).forEach(it => {
+      const li = el('li');
+      const a = el('a', null, '@' + it.name);
+      a.href = data.sample ? '#' : profileUrl(it.name);
+      if (!data.sample){ a.target = '_blank'; a.rel = 'noopener noreferrer'; }
+      else a.addEventListener('click', ev => ev.preventDefault());
+      li.append(a, el('span', 'meta', it.ts ? fmtSince(it.ts) : ''));
+      ul.append(li);
+    });
+    const more = $('more');
+    more.hidden = filtered.length <= shown;
+    more.textContent = `Show more (${fmtN(filtered.length - shown)} left)`;
+  }
+
+  /* ---------- left to do ---------- */
+  function renderCounter(){
+    if (!data) return;
+    const q = queue();
+    const total = q.length;
+    const opened = q.filter(x => state.clicked[x.key]).length;
+    const left = total - opened;
+    const day0 = new Date(); day0.setHours(0, 0, 0, 0);
+    const today = q.filter(x => state.clicked[x.key] >= day0.getTime()).length;
+    const aside = data.notBack.filter(x => state.kept[x.key] || state.missing[x.key]).length;
+    $('leftNum').textContent = fmtN(left);
+    $('totalNum').textContent = fmtN(total);
+    $('overallFill').style.width = total ? (opened / total * 100) + '%' : '0%';
+    const bits = [`${fmtN(opened)} opened`];
+    if (today) bits.push(`${fmtN(today)} today`);
+    bits.push(`${fmtN(aside)} set aside`);
+    const size = +state.size || 30;
+    if (left > 0) bits.push(`about ${fmtN(Math.ceil(left / size))} batch${Math.ceil(left / size) === 1 ? '' : 'es'} to go`);
+    else if (total) bits.push('all opened');
+    $('counterSub').textContent = bits.join(' · ');
+  }
+
+  /* ---------- follow-back rate and growth chart ---------- */
+  let chartUnit = 'month';
+  const pct = (a, b) => b ? (a / b * 100).toFixed(1).replace(/\.0$/, '') + '%' : '–';
+  function renderGrowth(){
+    const box = $('growth');
+    if (!data){ box.hidden = true; return; }
+    box.hidden = false;
+    const nF = data.following.length, nW = data.followers.length, nM = data.mutual.length;
+    $('growthNote').textContent = `${pct(nM, nF)} follow you back`;
+    const rates = $('rates');
+    rates.replaceChildren();
+    const rows = [
+      [pct(nM, nF), `of the ${fmtN(nF)} accounts you follow follow you back`],
+      [pct(nM, nW), `of your ${fmtN(nW)} followers you follow back`],
+      [fmtN(data.notBack.length), "accounts you follow that don't follow back"],
+      [nF ? (nW / nF).toFixed(2) : '–', 'followers for every account you follow']
+    ];
+    for (const [v, k] of rows){
+      const d = el('div', 'rate');
+      d.append(el('span', 'v', v), el('span', 'k', k));
+      rates.append(d);
+    }
+    drawChart();
+  }
+  function drawChart(){
+    const holder = $('chartbox'), tip = $('chartTip');
+    holder.querySelectorAll('svg').forEach(n => n.remove());
+    tip.hidden = true;
+    const series = buildSeries(data.followers, chartUnit);
+    $('chartNone').hidden = series.length > 0;
+    $('chartTitle').textContent = chartUnit === 'year' ? 'New followers per year' : 'New followers per month';
+    $('unitMonth').setAttribute('aria-pressed', String(chartUnit === 'month'));
+    $('unitYear').setAttribute('aria-pressed', String(chartUnit === 'year'));
+    const table = $('chartTable');
+    table.replaceChildren();
+    holder.hidden = !series.length;
+    $('chartRead').textContent = '';
+    if (!series.length) return;
+
+    const head = el('thead'), hr = el('tr');
+    hr.append(el('th', null, chartUnit === 'year' ? 'Year' : 'Month'), el('th', null, 'New followers'));
+    head.append(hr); table.append(head);
+    const tb = el('tbody');
+    for (const s of series.slice().reverse()){
+      const tr = el('tr'); tr.append(el('td', null, s.label), el('td', null, fmtN(s.count))); tb.append(tr);
+    }
+    table.append(tb);
+
+    const NS = 'http://www.w3.org/2000/svg';
+    const mk = (n, a) => { const e = document.createElementNS(NS, n); for (const k in a) e.setAttribute(k, a[k]); return e; };
+    const slot = chartUnit === 'year' ? 56 : 26, barW = chartUnit === 'year' ? 24 : 16;
+    const ML = 38, MT = 20, MB = 24, H = 190, plotH = H - MT - MB;
+    const max = Math.max(...series.map(s => s.count));
+    const ticks = niceTicks(max), top = ticks[ticks.length - 1];
+    const W = Math.max(holder.clientWidth || 0, ML + series.length * slot + 8);
+    const svg = mk('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: 'group', 'aria-label': $('chartTitle').textContent });
+    const yOf = v => MT + plotH - v / top * plotH;
+    const fmtTick = v => v >= 1000 ? (v / 1000) + 'K' : String(v);
+    ticks.forEach(v => {
+      svg.append(mk('line', { class: v === 0 ? 'g-base' : 'g-grid', x1: ML, x2: W, y1: yOf(v), y2: yOf(v) }));
+      const t = mk('text', { class: 'g-text', x: ML - 6, y: yOf(v) + 4, 'text-anchor': 'end' });
+      t.textContent = fmtTick(v); svg.append(t);
+    });
+    const peak = series.reduce((b, s) => s.count > b.count ? s : b, series[0]);
+    const bars = [];
+    series.forEach((s, i) => {
+      const cx = ML + i * slot + slot / 2, x = cx - barW / 2;
+      const h = s.count ? Math.max(2, s.count / top * plotH) : 0, y = MT + plotH - h;
+      if (h){
+        const r = Math.min(4, h);
+        const p = mk('path', { class: 'gbar', d: `M${x},${MT + plotH}V${y + r}Q${x},${y} ${x + r},${y}H${x + barW - r}Q${x + barW},${y} ${x + barW},${y + r}V${MT + plotH}Z` });
+        svg.append(p); bars[i] = p;
+      }
+      const showLab = chartUnit === 'year' || s.month === 0 || i === 0;
+      if (showLab){
+        const t = mk('text', { class: 'g-text', x: cx, y: H - 6, 'text-anchor': chartUnit === 'month' && i === 0 && s.month !== 0 ? 'start' : 'middle' });
+        if (chartUnit === 'month' && i === 0 && s.month !== 0) t.setAttribute('x', x);
+        t.textContent = chartUnit === 'year' ? s.label : String(s.year); svg.append(t);
+      }
+    });
+    // label the single tallest column on its cap
+    const pi = series.indexOf(peak);
+    const pt = mk('text', { class: 'g-text', x: ML + pi * slot + slot / 2, y: yOf(peak.count) - 5, 'text-anchor': 'middle' });
+    pt.textContent = fmtN(peak.count); svg.append(pt);
+
+    const defaultRead = `Most new followers: ${peak.label}, ${fmtN(peak.count)}. Total in the chart: ${fmtN(series.reduce((a, s) => a + s.count, 0))}.`;
+    $('chartRead').textContent = defaultRead;
+    let cur = -1;
+    const show = i => {
+      if (cur >= 0 && bars[cur]) bars[cur].classList.remove('sel');
+      cur = i;
+      if (bars[i]) bars[i].classList.add('sel');
+      const s = series[i];
+      tip.replaceChildren(el('strong', null, fmtN(s.count)), el('span', null, s.label));
+      tip.hidden = false;
+      const cx = ML + i * slot + slot / 2;
+      const ty = s.count ? yOf(s.count) : yOf(0);
+      tip.style.left = Math.max(0, Math.min(cx - tip.offsetWidth / 2, W - tip.offsetWidth)) + 'px';
+      tip.style.top = Math.max(0, ty - tip.offsetHeight - 10) + 'px';
+      $('chartRead').textContent = `${s.label}: ${fmtN(s.count)} new follower${s.count === 1 ? '' : 's'}`;
+    };
+    const clear = () => {
+      if (cur >= 0 && bars[cur]) bars[cur].classList.remove('sel');
+      cur = -1; tip.hidden = true; $('chartRead').textContent = defaultRead;
+    };
+    series.forEach((s, i) => {
+      const hit = mk('rect', { class: 'ghit', x: ML + i * slot, y: MT, width: slot, height: plotH, tabindex: 0,
+        role: 'img', 'aria-label': `${s.label}: ${s.count} new followers` });
+      hit.addEventListener('pointerenter', () => show(i));
+      hit.addEventListener('focus', () => show(i));
+      hit.addEventListener('pointerleave', clear);
+      hit.addEventListener('blur', clear);
+      svg.append(hit);
+    });
+    holder.insertBefore(svg, tip);
+    holder.scrollLeft = holder.scrollWidth;      // newest months first in view
+  }
+
+  /* ---------- downloads ---------- */
+  function dlSets(){
+    const asideList = [];
+    for (const it of data.notBack){
+      if (state.kept[it.key]) asideList.push([it, 'kept']);
+      else if (state.missing[it.key]) asideList.push([it, state.missing[it.key] === 'renamed' ? 'renamed' : 'not following']);
+    }
+    const plain = list => ({
+      header: ['username', 'profile_url', 'date'],
+      rows: list.map(x => [x.name, profileUrl(x.name), isoDate(x.ts)]),
+      names: list.map(x => x.name)
+    });
+    return [
+      Object.assign({ id: 'following', file: 'following-all.csv', title: 'Everyone you follow', note: 'full list, use as a backup' }, plain(data.following)),
+      Object.assign({ id: 'notback', file: 'not-following-back.csv', title: "Don't follow back", note: 'includes accounts you set aside' }, plain(data.notBack)),
+      Object.assign({ id: 'fans', file: 'fans.csv', title: 'Fans', note: 'follow you, you don’t follow them' }, plain(data.fans)),
+      Object.assign({ id: 'mutual', file: 'mutual.csv', title: 'Mutual', note: 'follow each other' }, plain(data.mutual)),
+      { id: 'aside', file: 'set-aside.csv', title: 'Set aside', note: 'kept, or not found on Instagram',
+        header: ['username', 'profile_url', 'reason', 'date'],
+        rows: asideList.map(([x, why]) => [x.name, profileUrl(x.name), why, isoDate(x.ts)]),
+        names: asideList.map(([x]) => x.name) }
+    ];
+  }
+  function say(id, text){ $(id).textContent = text; }
+  function saveCsv(set){
+    try {
+      const blob = new Blob(['﻿' + toCsv(set.header, set.rows)], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = set.file;
+      document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      say('dlStatus', `Saved ${set.file} (${fmtN(set.rows.length)} rows) to your downloads.`);
+    } catch(e){
+      say('dlStatus', 'Your browser blocked the download here. Use "Copy usernames" instead, or open the page in a regular browser tab.');
+    }
+  }
+  async function copyText(text){
+    try { await navigator.clipboard.writeText(text); return true; } catch(e){}
+    try {
+      const t = document.createElement('textarea');
+      t.value = text; t.setAttribute('readonly', ''); t.style.position = 'fixed'; t.style.opacity = '0';
+      document.body.append(t); t.select();
+      const ok = document.execCommand('copy'); t.remove(); return ok;
+    } catch(e){ return false; }
+  }
+  function renderDownloads(){
+    const box = $('dl');
+    if (!data){ box.hidden = true; return; }
+    box.hidden = false;
+    const ul = $('dlList');
+    ul.replaceChildren();
+    if (data.sample) ul.append(el('li', 'hint', 'These files contain the example accounts. Load your own export to get your real lists.'));
+    for (const set of dlSets()){
+      const li = el('li', 'dlrow');
+      const name = el('div', 'dlname');
+      name.append(el('strong', null, set.title), el('span', 'c', fmtN(set.rows.length)), el('span', 'hint', set.note));
+      const act = el('div', 'dlact');
+      const d = el('button', 'btn small', 'Download CSV'); d.type = 'button'; d.disabled = !set.rows.length;
+      d.addEventListener('click', () => saveCsv(set));
+      const c = el('button', 'btn small', 'Copy usernames'); c.type = 'button'; c.disabled = !set.rows.length;
+      c.addEventListener('click', async () => {
+        say('dlStatus', (await copyText(set.names.join('\n'))) ? `Copied ${fmtN(set.names.length)} usernames, one per line.` : 'Could not copy. Try the download instead.');
+      });
+      act.append(d, c);
+      li.append(name, act);
+      ul.append(li);
+    }
+  }
+
+  /* ---------- share and feedback ---------- */
+  // Set these three before you publish. Empty values are fine.
+  const SITE_URL = 'https://katerinaramm1.github.io/insta-unfollow/';          // e.g. 'https://example.com/unfollow/'. Empty = the address this page is opened from.
+  const FEEDBACK_URL = 'https://forms.zohopublic.eu/katerinarammzoho1/form/YourFeedbackontheInstagramUnfollowApp/formperma/gP7CvSKHapc6O_GA5-PBBoAKGLjJx-MFsidYLYOYx_E';      // e.g. a Google Form or Tally link. Empty = the author's Instagram profile.
+  const FEEDBACK_EMAIL = '';  // e.g. 'hello@example.com'. Empty = no email line is shown.
+  const SHARE_TEXT = 'Free tool to see who you follow on Instagram that does not follow you back. Nothing is uploaded.';
+  const FALLBACK_FEEDBACK = 'https://www.instagram.com/katycrete/';
+
+  function siteUrl(){
+    if (SITE_URL) return SITE_URL;
+    try {
+      if (/^https?:$/.test(location.protocol)) return location.origin + location.pathname;
+    } catch(e){}
+    return '';
+  }
+  function feedbackDetails(){
+    const lines = ['Unfollow Queue for Instagram, feedback details', 'Date: ' + isoDate(Date.now())];
+    if (data && !data.sample){
+      lines.push(`Following ${data.following.length}, followers ${data.followers.length}, not following back ${data.notBack.length}, fans ${data.fans.length}, mutual ${data.mutual.length}`);
+      lines.push('Files: ' + data.diag.files.map(f => `${f.name} (${f.count < 0 ? 'unreadable' : f.count})`).join(', '));
+    } else lines.push('No file loaded yet (example data).');
+    try { lines.push('Browser: ' + navigator.userAgent); } catch(e){}
+    return lines.join('\n');
+  }
+  function setupShare(){
+    const url = siteUrl();
+    const input = $('shareUrl');
+    input.value = url || 'Add your site address in SITE_URL to show it here';
+    const enc = encodeURIComponent, txt = enc(SHARE_TEXT), u = enc(url);
+    const links = {
+      shWa: `https://wa.me/?text=${enc(SHARE_TEXT + ' ' + url)}`,
+      shTg: `https://t.me/share/url?url=${u}&text=${txt}`,
+      shFb: `https://www.facebook.com/sharer/sharer.php?u=${u}`,
+      shX: `https://twitter.com/intent/tweet?text=${txt}&url=${u}`
+    };
+    for (const id in links){
+      const a = $(id);
+      a.href = url ? links[id] : '#';
+      a.addEventListener('click', e => { if (!url){ e.preventDefault(); say('shareStatus', 'The site address is not set yet. Set SITE_URL in the page.'); } });
+    }
+    if (navigator.share && url){
+      $('shNative').hidden = false;
+      $('shNative').addEventListener('click', async () => {
+        try { await navigator.share({ title: 'Unfollow Queue for Instagram', text: SHARE_TEXT, url }); }
+        catch(e){ /* cancelled, or not allowed here */ }
+      });
+    }
+    $('shCopy').addEventListener('click', async () => {
+      if (!url){ say('shareStatus', 'The site address is not set yet. Set SITE_URL in the page.'); return; }
+      say('shareStatus', (await copyText(url)) ? 'Link copied. Paste it into a message.' : 'Could not copy. Select the link and copy it by hand.');
+    });
+    $('fbLink').href = FEEDBACK_URL || FALLBACK_FEEDBACK;
+    $('fbCopy').addEventListener('click', async () => {
+      say('fbStatus', (await copyText(feedbackDetails())) ? 'Copied. Paste it into your message. It contains no usernames.' : 'Could not copy details here.');
+    });
+    if (FEEDBACK_EMAIL){
+      $('fbEmailRow').hidden = false;
+      $('fbEmail').textContent = FEEDBACK_EMAIL;
+      $('fbEmail').href = 'mailto:' + FEEDBACK_EMAIL + '?subject=' + enc('Unfollow Queue feedback');
+    }
+  }
+
+  /* ---------- wiring ---------- */
+  $('unitMonth').addEventListener('click', () => { chartUnit = 'month'; if (data) drawChart(); });
+  $('unitYear').addEventListener('click', () => { chartUnit = 'year'; if (data) drawChart(); });
+  $('growth').addEventListener('toggle', () => { if ($('growth').open && data) drawChart(); });
+  setupShare();
+  $('file').addEventListener('change', e => { loadFiles(e.target.files); e.target.value = ''; });
+  const drop = $('drop');
+  ['dragenter','dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave','drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => loadFiles(e.dataTransfer && e.dataTransfer.files));
+  window.addEventListener('dragover', e => e.preventDefault());
+  window.addEventListener('drop', e => e.preventDefault());
+
+  $('size').addEventListener('change', e => { state.size = +e.target.value; saveState(); batchIdx = firstOpenBatch(); renderQueue(); });
+  $('pause').addEventListener('change', e => { state.pause = +e.target.value; saveState(); tick(); });
+  $('sort').addEventListener('change', e => { state.sort = e.target.value; saveState(); batchIdx = firstOpenBatch(); renderQueue(); });
+  $('prev').addEventListener('click', () => { batchIdx--; renderQueue(); });
+  $('next').addEventListener('click', () => { batchIdx++; renderQueue(); window.scrollTo({ top: $('results').offsetTop - 8 }); });
+  $('renameTipBtn').addEventListener('click', () => { tab = 'renames'; shown = 100; renderTabs(); renderPanel(); });
+  $('renameMore').addEventListener('click', () => { shown += 100; renderRenames(); });
+  $('search').addEventListener('input', () => { shown = 100; renderPlain(); });
+  $('more').addEventListener('click', () => { shown += 200; renderPlain(); });
+
+  let resetTimer = null;
+  $('reset').addEventListener('click', () => {
+    const b = $('reset');
+    if (resetTimer){
+      clearTimeout(resetTimer); resetTimer = null;
+      state.clicked = {}; state.kept = {}; state.missing = {}; state.dismissed = {};
+      saveState();
+      b.textContent = 'Reset progress';
+      batchIdx = 0;
+      renderTabs(); renderQueue();
+    } else {
+      b.textContent = 'Click again to clear clicks and kept accounts';
+      resetTimer = setTimeout(() => { resetTimer = null; b.textContent = 'Reset progress'; }, 4000);
+    }
+  });
+
+  $('diagInput').addEventListener('input', e => {
+    const out = $('diagResult');
+    const key = e.target.value.trim().replace(/^@/, '').toLowerCase();
+    if (!key || !data){ out.textContent = ''; return; }
+    const inF = data.followers.some(x => x.key === key);
+    const inG = data.following.some(x => x.key === key);
+    out.textContent = (!inF && !inG)
+      ? `@${key} is in neither list. Check the spelling, or the account may have changed its username.`
+      : `@${key}: ${inF ? 'is' : 'is not'} in your followers list, ${inG ? 'is' : 'is not'} in your following list.`;
+  });
+
+  ['igFollowing', 'igFollowers'].forEach(id => {
+    $(id).addEventListener('input', e => { state[id] = e.target.value; saveState(); renderCounts(); });
+  });
+
+  $('policyLink').addEventListener('click', () => {
+    const p = $('policy');
+    p.open = true;
+    p.scrollIntoView({ block:'start' });
+  });
+
+  setInterval(tick, 1000);
+
+  // open with a clearly marked example so the tool is visible at rest
+  data = makeSample();
+  batchIdx = 0;
+  renderAll();
+})();
+</script>
